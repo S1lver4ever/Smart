@@ -1,0 +1,128 @@
+//Bibliotecas
+#include <ESP8266WiFi.h>
+#include <common.h>
+#include <FirebaseESP8266.h>
+#include <FirebaseFS.h>
+#include <Utils.h>
+#include <DHT.h>
+#include <IRremoteESP8266.h>
+
+//Conexões
+#define WIFI_SSID "SSID"
+#define WIFI_PASS "PASS"
+#define FIREBASE_HOST "HOST"
+#define FIREBASE_AUTH "*******"
+
+//Pinos
+#define DHT_PIN 5
+#define LAMPADA_UM 12
+#define LAMPADA_DOIS 4
+
+//Tipos
+FirebaseData fbdo;
+DHT dht(DHT_PIN, DHT11);
+IRsend irsend(14);
+
+//Variaveis Globais
+float temp = 0;
+float umi = 0;
+bool l_um = 0;
+bool l_dois = 0;
+bool ar_on = 0;
+bool ar_off = 0;
+
+//Comandos Ar-conicionado
+unsigned int L_pwr[] = {4384, 4328, 480, 1680, 584, 528, 532, 1608, 508, 1680, 536, 548, 532, 528, 560, 1628, 532, 556, 532, 552, 536, 1632, 480, 604, 480, 580, 560, 1628, 532, 1628, 536, 528, 504, 1688, 532, 528, 560, 1604, 560, 1604, 584, 1576, 560, 1604, 556, 528, 584, 1604, 588, 1552, 576, 1592, 492, 620, 536, 524, 508, 600, 560, 524, 564, 1600, 480, 584, 584, 524, 536, 1608, 560, 1628, 532, 1628, 484, 604, 532, 552, 536, 524, 556, 532, 556, 556, 532, 528, 560, 552, 532, 552, 560, 1604, 536, 1628, 532, 1632, 480, 1680, 536, 1628, 456, 5260, 4384, 4328, 560, 1628, 536, 548, 532, 1612, 556, 1604, 560, 528, 556, 552, 560, 1604, 532, 528, 588, 528, 532, 1608, 504, 604, 484, 576, 560, 1628, 564, 1576, 556, 552, 480, 1664, 584, 528, 480, 1684, 532, 1628, 536, 1628, 560, 1600, 536, 552, 560, 1580, 560, 1604, 556, 1612, 560, 552, 528, 556, 536, 548, 536, 524, 564, 1624, 536, 552, 532, 552, 564, 1604, 460, 1680, 560, 1604, 556, 528, 480, 628, 560, 528, 532, 552, 536, 528, 560, 552, 532, 552, 480, 604, 536, 1632, 536, 1628, 480, 1680, 560, 1604, 560, 1580, 480};
+unsigned int D_pwr[] = {4388, 4332, 560, 1604, 584, 524, 568, 1600, 536, 1604, 556, 548, 540, 548, 536, 1624, 484, 604, 536, 552, 536, 1604, 564, 548, 564, 496, 588, 1600, 560, 1600, 540, 548, 560, 1584, 588, 1576, 564, 548, 564, 1580, 584, 1600, 564, 1572, 564, 1624, 484, 1656, 560, 1604, 560, 528, 504, 1660, 560, 524, 560, 524, 564, 548, 536, 524, 588, 520, 536, 528, 564, 548, 564, 496, 560, 1608, 556, 528, 560, 548, 536, 548, 536, 528, 560, 524, 588, 1604, 536, 1600, 508, 604, 528, 1636, 536, 1628, 560, 1576, 508, 1680, 536, 1600, 484, 5260, 4412, 4300, 560, 1628, 536, 548, 536, 1604, 588, 1600, 540, 520, 564, 548, 532, 1628, 484, 604, 564, 524, 592, 1552, 560, 548, 564, 520, 540, 1600, 588, 1576, 560, 548, 536, 1608, 588, 1604, 540, 544, 564, 1580, 560, 1604, 588, 1572, 588, 1576, 560, 1624, 568, 1572, 564, 552, 560, 1576, 588, 524, 588, 496, 480, 604, 536, 548, 540, 548, 560, 528, 536, 548, 460, 604, 560, 1628, 564, 520, 564, 496, 588, 500, 560, 548, 540, 548, 536, 1604, 564, 1600, 560, 548, 564, 1604, 480, 1656, 588, 1576, 560, 1604, 560, 1604, 480};
+
+
+void setup() {
+  Serial.begin(74880);
+  dht.begin();
+
+  pinMode(LAMPADA_UM, OUTPUT);
+  pinMode(LAMPADA_DOIS, OUTPUT);
+  
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  Serial.print("Connecting to Wi-Fi");
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    Serial.print(".");
+    delay(300);
+  }
+  Serial.println();
+  Serial.print("Connected with IP: ");
+  Serial.println(WiFi.localIP());
+  Serial.println();
+
+  Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
+  Firebase.reconnectWiFi(true);
+  
+}
+
+void loop() {
+  
+  lerDados();
+  respondeFire();
+  enviaDados();
+  
+}
+
+void ligarAr(){
+
+  Firebase.setInt(fbdo, "/SmartRoom/OnAr", 0);
+  irsend.sendRaw(L_pwr, 199, 38);
+  delay(800);
+  
+}
+
+void desligarAr(){
+
+  Firebase.setInt(fbdo, "/SmartRoom/OffAr", 0);
+  irsend.sendRaw(D_pwr, 199, 38);
+  delay(800);
+  
+}
+
+void enviaDados(){
+
+  Firebase.setFloat(fbdo, "/SmartRoom/Temperatura", temp);
+  Firebase.setFloat(fbdo, "/SmartRoom/Umidade", umi);
+  
+}
+
+void lerDados(){
+
+  temp = dht.readTemperature();
+  umi = dht.readHumidity();
+  Firebase.getInt(fbdo, "/SmartRoom/Lampada01");
+  l_um = fbdo.intData();
+  Firebase.getInt(fbdo, "/SmartRoom/Lampada02");
+  l_dois = fbdo.intData();
+  Firebase.getInt(fbdo, "/SmartRoom/OffAr");
+  ar_off = fbdo.intData();
+  Firebase.getInt(fbdo, "/SmartRoom/OnAr");
+  ar_on = fbdo.intData();
+  
+}
+
+void respondeFire(){
+
+  if(l_um == 1){
+    digitalWrite(LAMPADA_UM, HIGH);
+  }else{
+    digitalWrite(LAMPADA_UM, LOW);
+  }
+  if(l_dois == 1){
+    digitalWrite(LAMPADA_DOIS, HIGH);
+  }else{
+    digitalWrite(LAMPADA_DOIS, LOW);
+  }
+  if(ar_on == 1){
+    ligarAr();
+  }
+  if(ar_off == 1){
+    desligarAr();
+  }
+  
+}
