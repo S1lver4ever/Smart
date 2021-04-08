@@ -6,22 +6,23 @@
 #include <Utils.h>
 #include <DHT.h>
 #include <IRremoteESP8266.h>
+#include <IRremoteInt.h>
 
 //Conexões
-#define WIFI_SSID "SSID"
-#define WIFI_PASS "PASS"
-#define FIREBASE_HOST "HOST"
-#define FIREBASE_AUTH "*******"
+#define WIFI_SSID "UPE_2.4"
+#define WIFI_PASS "5m@rtup3"
+#define FIREBASE_HOST "https://smartroom-629d6-default-rtdb.firebaseio.com"
+#define FIREBASE_AUTH "aCuOdd9CX5Z0gWADeRhlsX6v48w7VSv0FRkzmmlv"
 
 //Pinos
 #define DHT_PIN 5
 #define LAMPADA_UM 12
-#define LAMPADA_DOIS 4
+#define LAMPADA_DOIS 2
 
 //Tipos
 FirebaseData fbdo;
 DHT dht(DHT_PIN, DHT11);
-IRsend irsend(14);
+IRsend irsend(4);
 
 //Variaveis Globais
 float temp = 0;
@@ -39,7 +40,8 @@ unsigned int D_pwr[] = {4388, 4332, 560, 1604, 584, 524, 568, 1600, 536, 1604, 5
 void setup() {
   Serial.begin(74880);
   dht.begin();
-
+  irsend.begin();
+  
   pinMode(LAMPADA_UM, OUTPUT);
   pinMode(LAMPADA_DOIS, OUTPUT);
   
@@ -61,15 +63,17 @@ void setup() {
 }
 
 void loop() {
-  
+
   lerDados();
   respondeFire();
+  delay(800);
   enviaDados();
-  
+
 }
 
 void ligarAr(){
 
+  Serial.print("\nAr condicionado.");
   Firebase.setInt(fbdo, "/SmartRoom/OnAr", 0);
   irsend.sendRaw(L_pwr, 199, 38);
   delay(800);
@@ -93,6 +97,8 @@ void enviaDados(){
 
 void lerDados(){
 
+  Serial.print("\nTemperatura: ");
+  Serial.print(temp);
   temp = dht.readTemperature();
   umi = dht.readHumidity();
   Firebase.getInt(fbdo, "/SmartRoom/Lampada01");
